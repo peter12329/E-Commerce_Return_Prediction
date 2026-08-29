@@ -1,8 +1,13 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import RocCurveDisplay
+from sklearn.metrics import PrecisionRecallDisplay
+
 
 path = r"C:\Users\venjo\Desktop\E-Commerce Return Prediction\datasets\ecommerce_sales_customer_analytics_150k.csv"
 df = pd.read_csv(path)
@@ -35,6 +40,7 @@ for col in df.select_dtypes(include='object').columns:
 X = pd.get_dummies(df.drop(columns=['is_returned']), drop_first=True)
 y = df['is_returned']
 
+
 # t/t split
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
@@ -52,3 +58,14 @@ y_pred = model.predict(X_test_scaled)
 print("Accuracy:", accuracy_score(y_test, y_pred))
 print(classification_report(y_test, y_pred))
 print(confusion_matrix(y_test, y_pred))
+
+y_prob = model.predict_proba(X_test_scaled)[:, 1]
+print("ROC-AUC:", roc_auc_score(y_test, y_prob))
+
+
+# ROC curve
+RocCurveDisplay.from_estimator(model, X_test_scaled, y_test)
+plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random guess')
+plt.title('ROC Curve — Return Prediction')
+plt.legend()
+plt.show()

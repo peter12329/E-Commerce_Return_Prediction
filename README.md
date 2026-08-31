@@ -151,6 +151,49 @@ The Logistic Regression model was evaluated using the **test dataset**, which co
 
 The model achieved a **ROC-AUC score of 96.88%**, indicating a strong ability to *rank* returned orders above non-returned orders across all thresholds. This is notably higher than the precision/recall for the returned class, which reflects performance at a single fixed threshold (0.5) rather than across all thresholds — a common pattern with imbalanced data.
 
+## Handling Class Imbalance
+
+Because `Returned` orders make up only 6.9% of the dataset, the baseline logistic regression model had limited ability to identify them (56% recall). To test whether this could be improved, the model was retrained with `class_weight='balanced'`, which increases the training penalty for misclassifying the minority class.
+
+The computed class weights were:
+
+| Class            | Weight |
+| ---------------- | -----: |
+| Not Returned (0) |   0.54 |
+| Returned (1)     |   7.30 |
+
+This means an error on a `Returned` order was penalized roughly **13.6x** more heavily than an error on a `Not Returned` order during training.
+
+### Balanced Model Results
+
+| Metric                       |  Score |
+| ----------------------------- | -----: |
+| **Accuracy**                  | 93.17% |
+| **Precision (Not Returned)**  |   100% |
+| **Recall (Not Returned)**     |    93% |
+| **F1-Score (Not Returned)**   |    96% |
+| **Precision (Returned)**      |    50% |
+| **Recall (Returned)**         |   100% |
+| **F1-Score (Returned)**       |    67% |
+| **ROC-AUC**                   | 96.87% |
+
+**Confusion Matrix (balanced model):**
+
+| Actual / Predicted   | Not Returned (0) | Returned (1) |
+| --------------------- | ---------------: | -----------: |
+| **Not Returned (0)**  |           23,844 |        1,888 |
+| **Returned (1)**      |                0 |        1,892 |
+
+### Interpretation
+
+`class_weight='balanced'` shifted the model's decision threshold rather than improving its underlying discriminative ability — ROC-AUC stayed essentially unchanged (96.88% → 96.87%), since AUC measures ranking quality across all thresholds, not performance at any single cutoff.
+
+The practical effect was a tradeoff:
+* **Recall for `Returned` rose from 56% to 100%** — the model now catches every actual return in the test set.
+* **Precision for `Returned` fell from 55% to 50%** — roughly half of the orders it flags as "will be returned" are false alarms.
+
+Which version is preferable depends on business cost: if failing to catch a real return is more costly than investigating a false alarm, the balanced model is the better choice. If false alarms carry a high operational cost, the original (unweighted) model's more moderate tradeoff may be preferable.
+
 ## Visualizations
 
 *(Insert ROC curve and confusion matrix plots here.)*

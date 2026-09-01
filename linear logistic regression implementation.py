@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_score
 from sklearn.metrics import RocCurveDisplay
 from sklearn.metrics import PrecisionRecallDisplay
 from sklearn.utils.class_weight import compute_class_weight
@@ -61,15 +62,10 @@ model.fit(X_train_scaled, y_train)
 
 # prediction
 y_pred = model.predict(X_test_scaled)
-print("Accuracy:", accuracy_score(y_test, y_pred))
-print(classification_report(y_test, y_pred))
+y_prob = model.predict_proba(X_test_scaled)[:, 1]
 print(confusion_matrix(y_test, y_pred))
 
-y_prob = model.predict_proba(X_test_scaled)[:, 1]
-print("ROC-AUC:", roc_auc_score(y_test, y_prob))
-
-
-# ROC curve
+# ROC unbalancedcurve
 RocCurveDisplay.from_estimator(model, X_test_scaled, y_test)
 plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random guess')
 plt.title('ROC Curve — Return Prediction')
@@ -83,15 +79,32 @@ modelbalanced = LogisticRegression(max_iter=1000, class_weight='balanced')
 modelbalanced.fit(X_train_scaled, y_train)
 
 y_predbalanced = modelbalanced.predict(X_test_scaled)
-print("Accuracy:", accuracy_score(y_test, y_predbalanced))
-print(classification_report(y_test, y_predbalanced))
-print(confusion_matrix(y_test, y_predbalanced))
-
 y_probbalanced = modelbalanced.predict_proba(X_test_scaled)[:, 1]
-print("ROC-AUC:", roc_auc_score(y_test, y_predbalanced))
+print(confusion_matrix(y_test, y_predbalanced))
 
 RocCurveDisplay.from_estimator(modelbalanced, X_test_scaled, y_test)
 plt.plot([0, 1], [0, 1], linestyle='--', color='gray', label='Random guess')
-plt.title('ROC Curve — Return Prediction(balanced)')
+plt.title('ROC Curve — Return Prediction (balanced)')
 plt.legend()
 plt.show()
+
+# quick model comparison
+comparison = pd.DataFrame({
+    'Metric': ['Accuracy', 'Precision (Returned)', 'Recall (Returned)', 'F1 (Returned)', 'ROC-AUC'],
+    'Baseline': [
+        accuracy_score(y_test, y_pred),
+        precision_score(y_test, y_pred),
+        recall_score(y_test, y_pred),
+        f1_score(y_test, y_pred),
+        roc_auc_score(y_test, y_prob)
+    ],
+    'Balanced': [
+        accuracy_score(y_test, y_predbalanced),
+        precision_score(y_test, y_predbalanced),
+        recall_score(y_test, y_predbalanced),
+        f1_score(y_test, y_predbalanced),
+        roc_auc_score(y_test, y_probbalanced)
+    ]
+})
+comparison = comparison.round(2)
+print(comparison)

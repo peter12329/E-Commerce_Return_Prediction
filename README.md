@@ -11,7 +11,7 @@ To build a machine learning model that can predict product returns based on orde
 ## Dataset
 
 * **Number of records:** 138,116
-* **Number of model features:** 119
+* **Number of model features:** 112
 * **Target variable:** `is_returned`
 * **Dataset source:** [Kaggle](https://www.kaggle.com/datasets/datascikhan/e-commerce-sales-and-customer-analytics?select=ecommerce_sales_customer_analytics_150k.csv)
 
@@ -31,13 +31,17 @@ Columns were excluded for three distinct reasons:
 * `order_time`
 * `customer_review`
 
-**Post-return / target leakage** — these columns are only populated or determined *after* a return occurs, so including them would let the model "see" the answer:
+**Post-return / target leakage** — these columns are only populated, determined, or reset *after* a return occurs, so including them would let the model "see" the answer rather than genuinely predict it:
 * `return_status` (used to build the target itself)
 * `return_reason`
 * `review_sentiment`
 * `customer_rating`
-* `order_status` — one category (`Returned`) was found to align perfectly with `is_returned = 1`
-* `payment_status` — one category (`Refunded`) was found to align perfectly with `is_returned = 1`
+* `order_status` — the `Returned` category aligned perfectly with `is_returned = 1`
+* `payment_status` — the `Refunded` category aligned perfectly with `is_returned = 1`
+* `delivery_status` — the `On Time`, `Delayed`, and `Early` categories had a **0% return rate**, while `Cancelled` had 38.5%
+* `loyalty_points_earned` — equal to **exactly 0 for every returned order**, with zero variance
+* `discount_amount` — same zero-variance pattern: exactly 0 for every returned order
+* `loyalty_points_redeemed` — same zero-variance pattern: exactly 0 for every returned order
 
 **High-cardinality categorical columns** — too many unique values to one-hot encode without exploding the feature space:
 * `customer_postal_code`
@@ -47,7 +51,7 @@ Columns were excluded for three distinct reasons:
 * `campaign_name`
 * `coupon_code`
 
-`delivery_status` was tested for leakage the same way as `order_status` and `payment_status` (checking the mean return rate per category). It showed no near-perfect split — its highest category (`Cancelled`) had a 38.5% return rate, with all other categories near 0% — so it was retained as a legitimate feature rather than dropped.
+`gross_sales` was checked using the same distribution comparison used to detect the numeric leaks above, and showed no zero-variance pattern (its values overlapped normally between returned and non-returned orders), so it was retained.
 
 ### Target Variable
 
@@ -81,42 +85,48 @@ Missing values in `delivery_days` and `estimated_delivery_days` were handled usi
 ## Data Preprocessing
 
 1. Created the binary target variable `is_returned`.
-2. Removed identifier, post-return, high-cardinality, and irrelevant columns (see Excluded Columns above).
+2. Removed identifier, post-return leakage, high-cardinality, and irrelevant columns (see Excluded Columns above).
 3. Filled missing values in `delivery_days` and `estimated_delivery_days` using the median.
 4. Converted categorical variables using one-hot encoding.
 5. Split the data into **80% training** and **20% testing** data.
 6. Standardized the features using `StandardScaler`.
 
-After one-hot encoding, the dataset contained **119 model features**.
+After one-hot encoding, the dataset contained **112 model features**.
 
 ## Leakage Detection
 
-An initial version of the model, trained before `order_status` and `payment_status` were removed, achieved **100% accuracy** on the test set. A perfect score on a real-world imbalanced classification task is a strong sign of data leakage rather than genuine model skill.
+Leakage was found and removed across **three separate rounds** of investigation, each triggered by suspiciously strong results.
 
-To find the cause, the mean return rate was computed for every category within each categorical column:
+**Round 1 — categorical leakage (order/payment status).**
+An initial model, trained before any leakage checks, achieved **100% accuracy** on the test set — a strong sign of leakage in an imbalanced, real-world classification task. Checking the mean return rate per category for every categorical column revealed:
+* `order_status = "Returned"` had a mean `is_returned` of **1.0** (all other categories, 0.0)
+* `payment_status = "Refunded"` had a mean `is_returned` of **1.0** (all other categories, 0.0)
 
-```python
-for col in df.select_dtypes(include='object').columns:
-    print(df.groupby(col)['is_returned'].mean())
-```
+Removing both columns brought accuracy down to a more plausible 93.86%, with ROC-AUC of 96.88% — still too high to be trustworthy, as later rounds confirmed.
 
-This showed that:
-* `order_status = "Returned"` had a mean `is_returned` of **1.0** (and all other categories, 0.0)
-* `payment_status = "Refunded"` had a mean `is_returned` of **1.0** (and all other categories, 0.0)
+**Round 2 — a missed categorical leak (delivery status).**
+`delivery_status` was checked using the same method and initially judged safe, since no single category showed a return rate of exactly 1.0. This missed a different form of leakage: three of its four categories (`On Time`, `Delayed`, `Early`) had a return rate of **exactly 0%**, while only `Cancelled` showed any returns (38.5%). Combined with `class_weight='balanced'` and hyperparameter tuning via `GridSearchCV`, this produced unrealistically large coefficients (magnitudes over -30) and near-perfect recall.
 
-Both columns were removed, after which the model's accuracy dropped to a realistic **93.86%**, confirming the leak was resolved.
+**Round 3 — numeric zero-variance leakage.**
+After removing `delivery_status`, coefficients remained abnormally large, now concentrated on `loyalty_points_earned` (-68.7). Grouping several numeric columns by `is_returned` revealed that `loyalty_points_earned`, `discount_amount`, and `loyalty_points_redeemed` were **all set to exactly 0, with zero variance, for every single returned order** — a downstream effect of the return itself, not a usable predictive signal.
+
+After removing all leaking columns, ROC-AUC dropped to a genuine **0.79**, and feature coefficients returned to normal, single-digit magnitudes, confirming the leakage was fully resolved.
 
 ## Machine Learning Model
 
 ### Logistic Regression
 
-Logistic Regression was used because this is a binary classification problem.
+Logistic Regression was used because this is a binary classification problem. Three variants were trained and compared on the same clean, leakage-free feature set:
+
+1. **Baseline** — default `LogisticRegression`, no class weighting
+2. **Balanced** — `class_weight='balanced'` to counter the 93/7 class imbalance
+3. **Grid Search** — `GridSearchCV` tuning `C` (regularization strength) and `class_weight`, optimizing for F1-score via 5-fold cross-validation
 
 **Input (X):**
 
 * Customer and order-related features after preprocessing
 * Categorical features converted using one-hot encoding
-* **119 final model features**
+* **112 final model features**
 
 **Output (Y):**
 
@@ -125,109 +135,77 @@ Logistic Regression was used because this is a binary classification problem.
   * `0` = Not Returned
   * `1` = Returned
 
-## Model Results
+## Model Comparison (Clean, Leakage-Free Data)
 
-The Logistic Regression model was evaluated using the **test dataset**, which contains **27,624 records**.
+The models were evaluated on the **test dataset**, which contains **27,624 records**.
 
-| Metric                       |  Score |
-| ----------------------------- | -----: |
-| **Accuracy**                  | 93.86% |
-| **Precision (Not Returned)**  |    97% |
-| **Recall (Not Returned)**     |    97% |
-| **F1-Score (Not Returned)**   |    97% |
-| **Precision (Returned)**      |    55% |
-| **Recall (Returned)**         |    56% |
-| **F1-Score (Returned)**       |    56% |
-| **ROC-AUC**                   | 96.88% |
+| Metric                    | Baseline | Balanced | Grid Search |
+| -------------------------- | -------: | -------: | ----------: |
+| **Accuracy**               |     0.93 |     0.69 |        0.69 |
+| **Precision (Returned)**   |     0.39 |     0.15 |        0.15 |
+| **Recall (Returned)**      |     0.01 |     0.76 |        0.76 |
+| **F1-Score (Returned)**    |     0.03 |     0.25 |        0.25 |
+| **ROC-AUC**                |     0.79 |     0.79 |        0.79 |
 
-### Confusion Matrix
+**Confusion Matrices:**
 
-| Actual / Predicted   | Not Returned (0) | Returned (1) |
-| --------------------- | ---------------: | -----------: |
-| **Not Returned (0)**  |           24,869 |          863 |
-| **Returned (1)**      |              833 |        1,059 |
+Baseline:
+```
+[[25693    39]
+ [ 1867    25]]
+```
 
-### ROC-AUC
+Balanced:
+```
+[[17589  8143]
+ [  454  1438]]
+```
 
-The model achieved a **ROC-AUC score of 96.88%**, indicating a strong ability to *rank* returned orders above non-returned orders across all thresholds. This is notably higher than the precision/recall for the returned class, which reflects performance at a single fixed threshold (0.5) rather than across all thresholds — a common pattern with imbalanced data.
-
-## Handling Class Imbalance
-
-Because `Returned` orders make up only 6.9% of the dataset, the baseline logistic regression model had limited ability to identify them (56% recall). To test whether this could be improved, the model was retrained with `class_weight='balanced'`, which increases the training penalty for misclassifying the minority class.
-
-The computed class weights were:
-
-| Class            | Weight |
-| ---------------- | -----: |
-| Not Returned (0) |   0.54 |
-| Returned (1)     |   7.30 |
-
-This means an error on a `Returned` order was penalized roughly **13.6x** more heavily than an error on a `Not Returned` order during training.
-
-### Balanced Model Results
-
-| Metric                       |  Score |
-| ----------------------------- | -----: |
-| **Accuracy**                  | 93.17% |
-| **Precision (Not Returned)**  |   100% |
-| **Recall (Not Returned)**     |    93% |
-| **F1-Score (Not Returned)**   |    96% |
-| **Precision (Returned)**      |    50% |
-| **Recall (Returned)**         |   100% |
-| **F1-Score (Returned)**       |    67% |
-| **ROC-AUC**                   | 96.87% |
-
-**Confusion Matrix (balanced model):**
-
-| Actual / Predicted   | Not Returned (0) | Returned (1) |
-| --------------------- | ---------------: | -----------: |
-| **Not Returned (0)**  |           23,844 |        1,888 |
-| **Returned (1)**      |                0 |        1,892 |
+Grid Search Best (`C=10`, `class_weight='balanced'`):
+```
+[[17588  8144]
+ [  454  1438]]
+```
 
 ### Interpretation
 
-`class_weight='balanced'` shifted the model's decision threshold rather than improving its underlying discriminative ability — ROC-AUC stayed essentially unchanged (96.88% → 96.87%), since AUC measures ranking quality across all thresholds, not performance at any single cutoff.
+All three models share the same ROC-AUC (0.79), confirming they have identical underlying discriminative ability — `class_weight='balanced'` and hyperparameter tuning don't change what the model *can* distinguish, only where it draws the decision boundary.
 
-The practical effect was a tradeoff:
-* **Recall for `Returned` rose from 56% to 100%** — the model now catches every actual return in the test set.
-* **Precision for `Returned` fell from 55% to 50%** — roughly half of the orders it flags as "will be returned" are false alarms.
+* **Baseline** is heavily biased toward the majority class: it predicts "Returned" almost never (1% recall), making it accurate overall (93%) but practically useless for catching actual returns.
+* **Balanced** and **Grid Search** produce nearly identical results — both trade a large amount of precision (0.15) for much higher recall (0.76), catching roughly three-quarters of actual returns at the cost of many false alarms. Grid search confirmed that `class_weight='balanced'` combined with `C=10` was already close to optimal (best CV F1 score: 0.246) — it did not find a meaningfully better configuration than manually setting `class_weight='balanced'`.
+* **Threshold tuning** on the grid search model, by scanning thresholds to maximize F1, found an optimal threshold of **0.69**, yielding a more moderate tradeoff: Precision 0.19, Recall 0.43, F1 0.27 — a middle ground between the extremes of the baseline and the balanced/grid-search models.
 
-Which version is preferable depends on business cost: if failing to catch a real return is more costly than investigating a false alarm, the balanced model is the better choice. If false alarms carry a high operational cost, the original (unweighted) model's more moderate tradeoff may be preferable.
+This confirms that, on genuinely leakage-free data, predicting e-commerce returns from order and customer metadata alone is a difficult problem: even the best-tuned logistic regression achieves modest results (F1 ≈ 0.25–0.27 for the minority class), reflecting real limits in the available signal rather than a modeling shortcoming.
 
 ## Visualizations
 
-*(Insert ROC curve and confusion matrix plots here.)*
+*(Insert ROC curve and confusion matrix plots for the clean models here.)*
 
-* **ROC Curve** — plots the true positive rate against the false positive rate across all classification thresholds; the model's curve sits well above the random-guess diagonal.
-* **Confusion Matrix** — visual breakdown of correct vs. incorrect predictions for each class.
+## Main Findings
 
-### Interpretation
-
-The model achieved an accuracy of **93.86%** on the test dataset.
-
-However, because the dataset is imbalanced, accuracy alone does not fully represent the model's performance. The model achieved a **56% recall for returned orders**, meaning it correctly identified 1,059 of the 1,892 actual returned orders.
-
-### Main Findings
-
-* The model achieved **93.86% overall accuracy** on the test dataset.
-* The model performed better at identifying **non-returned orders** than returned orders.
-* The **56% recall for returned orders** indicates that the model missed a substantial share of actual returns.
-* The class imbalance in the dataset likely affected the model's ability to identify returned orders.
-* An early version of the model leaked the target through `order_status` and `payment_status`; identifying and removing this leakage was a key step in producing a trustworthy result.
+* An initial model achieved a suspicious **100% accuracy**, traced to leakage in `order_status` and `payment_status`.
+* A second round of leakage was found in `delivery_status`, whose non-`Cancelled` categories had a 0% return rate.
+* A third round of leakage was found in `loyalty_points_earned`, `discount_amount`, and `loyalty_points_redeemed`, all of which were fixed at exactly 0 for every returned order.
+* After removing all leaking columns, the model's true performance is **ROC-AUC 0.79** — substantially lower than the inflated 0.97 seen with leakage present, but a legitimate, defensible result.
+* The unweighted baseline has extremely low recall (1%) for returned orders; `class_weight='balanced'` raises recall to 76% at the cost of precision dropping to 15%.
+* `GridSearchCV` confirmed `class_weight='balanced'` with `C=10` as near-optimal — tuning did not meaningfully outperform manual class weighting.
+* Threshold tuning offers a middle-ground option (Precision 0.19, Recall 0.43, F1 0.27) between the aggressive recall-focused balanced model and the overly conservative baseline.
 
 ## Limitations
 
 * The dataset has a significant class imbalance.
-* The model's performance on returned orders is lower than its performance on non-returned orders.
+* Even after removing leakage, predicting returns from order/customer metadata alone is a genuinely difficult task, as reflected in the ROC-AUC of 0.79 and modest F1-scores across all model variants.
 * The dataset may not represent all e-commerce customers and orders.
 * Results may not generalize to other datasets or real-world situations.
 * Additional features (e.g., product category, which was not merged into this dataset) and alternative machine learning algorithms could potentially improve performance.
 
 ## Conclusion
 
-This project demonstrates how machine learning can be used to predict e-commerce returns. A Logistic Regression model was trained using **119 preprocessed features** and achieved **93.86% accuracy** on the test dataset.
+This project demonstrates how machine learning can be used to predict e-commerce returns — and, just as importantly, how easily inflated results can arise from data leakage. Three separate rounds of leakage were identified and removed over the course of the project, each caught by noticing suspiciously strong or unrealistic results (100% accuracy, near-perfect recall, and abnormally large model coefficients).
 
-Although the model performed well overall, its ability to identify returned orders was more limited, with a recall of **56%**. Future improvements could include addressing the class imbalance (e.g., `class_weight='balanced'` or resampling), adding relevant features such as product category, and testing other machine learning algorithms.
+The final, leakage-free Logistic Regression models achieved a modest but trustworthy **ROC-AUC of 0.79** across all variants. Class weighting and hyperparameter tuning both meaningfully improved the model's ability to catch actual returns (recall rising from 1% to 76%), at the cost of more false alarms (precision falling to 15%) — a genuine precision/recall tradeoff rather than a straightforward improvement. Threshold tuning offers a way to land at a different point along that same tradeoff.
+
+Future work includes adding relevant features such as product category, exploring resampling techniques (e.g. SMOTE) as an alternative to class weighting, and testing other machine learning algorithms.
 
 ## Technologies
 
@@ -235,3 +213,4 @@ Although the model performed well overall, its ability to identify returned orde
 * Pandas
 * Scikit-learn
 * Matplotlib
+* Numpy

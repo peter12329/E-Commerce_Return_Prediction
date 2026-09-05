@@ -11,6 +11,29 @@ from sklearn.metrics import (
 )
 from sklearn.utils.class_weight import compute_class_weight
 
+
+# ---------------------------------------------------------
+# Variables from the baseline 
+# ---------------------------------------------------------
+
+import importlib.util
+
+spec = importlib.util.spec_from_file_location(
+    "baseline",
+    r"C:\Users\venjo\Desktop\E-Commerce Return Prediction\linear logistic regression implementation.py"
+)
+
+baseline = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(baseline)
+
+y_pred = baseline.y_pred
+y_prob = baseline.y_prob
+X_train_scaled = baseline.X_train_scaled
+X_test_scaled = baseline.X_test_scaled
+y_train = baseline.y_train
+y_test = baseline.y_test
+model = baseline.model
+
 # ---------------------------------------------------------
 # Same preprocessing as the base script (kept identical so
 # results are directly comparable)
@@ -146,26 +169,31 @@ print(f"F1:        {f1_score(y_test, y_pred_final):.2f}")
 # ---------------------------------------------------------
 # Comparison table
 # ---------------------------------------------------------
-comparison = pd.DataFrame({
-    'Metric': ['Accuracy', 'Precision (Returned)', 'Recall (Returned)', 'F1 (Returned)', 'ROC-AUC'],
-    'Balanced': [
-        accuracy_score(y_test, y_predbalanced),
-        precision_score(y_test, y_predbalanced),
-        recall_score(y_test, y_predbalanced),
-        f1_score(y_test, y_predbalanced),
-        roc_auc_score(y_test, y_probbalanced)
-    ],
-    'Grid Search Best': [
-        accuracy_score(y_test, y_pred_best),
-        precision_score(y_test, y_pred_best),
-        recall_score(y_test, y_pred_best),
-        f1_score(y_test, y_pred_best),
-        roc_auc_score(y_test, y_prob_best)
-    ]
-})
-comparison = comparison.round(2)
-print("\n", comparison)
 
 print("Number of records:", df.shape[0])
 print("Number of model features:", X.shape[1])
 print("Target variable: is_returned")
+
+# balanced version
+modelbalanced = LogisticRegression(max_iter=1000, class_weight='balanced')
+modelbalanced.fit(X_train_scaled, y_train)
+y_predbalanced = modelbalanced.predict(X_test_scaled)
+y_probbalanced = modelbalanced.predict_proba(X_test_scaled)[:, 1]
+
+# grid search
+from sklearn.model_selection import GridSearchCV
+param_grid = {'C': [0.001, 0.01, 0.1, 1, 10], 'class_weight': [None, 'balanced']}
+grid = GridSearchCV(LogisticRegression(max_iter=1000), param_grid, scoring='f1', cv=5, n_jobs=-1)
+grid.fit(X_train_scaled, y_train)
+best_model = grid.best_estimator_
+y_pred_best = best_model.predict(X_test_scaled)
+y_prob_best = best_model.predict_proba(X_test_scaled)[:, 1]
+
+# comparison
+comparison = pd.DataFrame({
+    'Metric': ['Accuracy', 'Precision (Returned)', 'Recall (Returned)', 'F1 (Returned)', 'ROC-AUC'],
+    'Baseline': [accuracy_score(y_test, y_pred), precision_score(y_test, y_pred), recall_score(y_test, y_pred), f1_score(y_test, y_pred), roc_auc_score(y_test, y_prob)],
+    'Balanced': [accuracy_score(y_test, y_predbalanced), precision_score(y_test, y_predbalanced), recall_score(y_test, y_predbalanced), f1_score(y_test, y_predbalanced), roc_auc_score(y_test, y_probbalanced)],
+    'Grid Search': [accuracy_score(y_test, y_pred_best), precision_score(y_test, y_pred_best), recall_score(y_test, y_pred_best), f1_score(y_test, y_pred_best), roc_auc_score(y_test, y_prob_best)]
+})
+print(comparison.round(2))

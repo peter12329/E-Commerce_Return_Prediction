@@ -98,3 +98,20 @@ percentages = df['is_returned'].value_counts(normalize=True) * 100
 
 print("Not Returned (0):", counts[0], f"({percentages[0]:.1f}%)")
 print("Returned (1):", counts[1], f"({percentages[1]:.1f}%)")
+
+#lasso and ridge
+print("Setting up L1 and L2 models...")
+
+model_l2 = LogisticRegression(max_iter=1000, l1_ratio=0.0, class_weight='balanced', solver='saga')
+model_l1 = LogisticRegression(max_iter=1000, l1_ratio=1.0, class_weight='balanced', solver='saga')
+
+print("Fitting L1 (Lasso)...")
+model_l1.fit(X_train_scaled, y_train)
+print("L1 done.")
+
+print("Fitting L2 (Ridge)...")
+model_l2.fit(X_train_scaled, y_train)
+print("L2 done.")
+
+print("L1 non-zero coefficients:", (model_l1.coef_[0] != 0).sum(), "/", len(model_l1.coef_[0]))
+print("L2 non-zero coefficients:", (model_l2.coef_[0] != 0).sum(), "/", len(model_l2.coef_[0]))

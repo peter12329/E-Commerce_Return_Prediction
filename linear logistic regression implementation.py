@@ -115,3 +115,30 @@ print("L2 done.")
 
 print("L1 non-zero coefficients:", (model_l1.coef_[0] != 0).sum(), "/", len(model_l1.coef_[0]))
 print("L2 non-zero coefficients:", (model_l2.coef_[0] != 0).sum(), "/", len(model_l2.coef_[0]))
+
+for c_value in [1, 0.1, 0.01, 0.001]:
+
+    model_l1_test = LogisticRegression(
+        max_iter=2000,
+        l1_ratio=1.0,
+        C=c_value,
+        class_weight='balanced',
+        solver='saga'
+    )
+
+    model_l2_test = LogisticRegression(
+        max_iter=2000,
+        l1_ratio=0.0,
+        C=c_value,
+        class_weight='balanced',
+        solver='saga'
+    )
+
+    model_l1_test.fit(X_train_scaled, y_train)
+    model_l2_test.fit(X_train_scaled, y_train)
+
+    nonzero_l1 = (model_l1_test.coef_[0] != 0).sum()
+    nonzero_l2 = (model_l2_test.coef_[0] != 0).sum()
+
+    print(f"C={c_value}: L1 = {nonzero_l1}/112 non-zero coefficients")
+    print(f"C={c_value}: L2 = {nonzero_l2}/112 non-zero coefficients")

@@ -11,6 +11,9 @@ from sklearn.metrics import (
 )
 from sklearn.utils.class_weight import compute_class_weight
 
+from sklearn.svm import LinearSVC
+from sklearn.calibration import CalibratedClassifierCV
+
 
 # ---------------------------------------------------------
 # Variables from the baseline 
@@ -197,3 +200,19 @@ comparison = pd.DataFrame({
     'Grid Search': [accuracy_score(y_test, y_pred_best), precision_score(y_test, y_pred_best), recall_score(y_test, y_pred_best), f1_score(y_test, y_pred_best), roc_auc_score(y_test, y_prob_best)]
 })
 print(comparison.round(2))
+
+#SVM
+
+svm_model = LinearSVC(max_iter=5000, class_weight='balanced')
+svm_calibrated = CalibratedClassifierCV(svm_model, cv=3)
+svm_calibrated.fit(X_train_scaled, y_train)
+
+y_pred_svm = svm_calibrated.predict(X_test_scaled)
+y_prob_svm = svm_calibrated.predict_proba(X_test_scaled)[:, 1]
+
+print(confusion_matrix(y_test, y_pred_svm))
+print(f"Accuracy: {accuracy_score(y_test, y_pred_svm):.2f}")
+print(f"Precision: {precision_score(y_test, y_pred_svm):.2f}")
+print(f"Recall: {recall_score(y_test, y_pred_svm):.2f}")
+print(f"F1: {f1_score(y_test, y_pred_svm):.2f}")
+print(f"ROC-AUC: {roc_auc_score(y_test, y_prob_svm):.2f}")

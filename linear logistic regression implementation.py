@@ -100,45 +100,45 @@ print("Not Returned (0):", counts[0], f"({percentages[0]:.1f}%)")
 print("Returned (1):", counts[1], f"({percentages[1]:.1f}%)")
 
 #lasso and ridge
-print("Setting up L1 and L2 models...")
+#print("Setting up L1 and L2 models...")
 
-model_l2 = LogisticRegression(max_iter=1000, l1_ratio=0.0, class_weight='balanced', solver='saga')
-model_l1 = LogisticRegression(max_iter=1000, l1_ratio=1.0, class_weight='balanced', solver='saga')
+#model_l2 = LogisticRegression(max_iter=1000, l1_ratio=0.0, class_weight='balanced', solver='saga')
+#model_l1 = LogisticRegression(max_iter=1000, l1_ratio=1.0, class_weight='balanced', solver='saga')
 
-print("Fitting L1 (Lasso)...")
-model_l1.fit(X_train_scaled, y_train)
-print("L1 done.")
+#print("Fitting L1 (Lasso)...")
+#model_l1.fit(X_train_scaled, y_train)
+#print("L1 done.")
 
-print("Fitting L2 (Ridge)...")
-model_l2.fit(X_train_scaled, y_train)
-print("L2 done.")
+#print("Fitting L2 (Ridge)...")
+#model_l2.fit(X_train_scaled, y_train)
+#print("L2 done.")
 
-print("L1 non-zero coefficients:", (model_l1.coef_[0] != 0).sum(), "/", len(model_l1.coef_[0]))
-print("L2 non-zero coefficients:", (model_l2.coef_[0] != 0).sum(), "/", len(model_l2.coef_[0]))
+#print("L1 non-zero coefficients:", (model_l1.coef_[0] != 0).sum(), "/", len(model_l1.coef_[0]))
+#print("L2 non-zero coefficients:", (model_l2.coef_[0] != 0).sum(), "/", len(model_l2.coef_[0]))
 
-for c_value in [1, 0.1, 0.01, 0.001]:
+#for c_value in [1, 0.1, 0.01, 0.001]:
 
-    model_l1_test = LogisticRegression(
-        max_iter=2000,
-        l1_ratio=1.0,
-        C=c_value,
-        class_weight='balanced',
-        solver='saga'
-    )
+    #model_l1_test = LogisticRegression(
+       #max_iter=2000,
+        #l1_ratio=1.0,
+        #C=c_value,
+        #class_weight='balanced',
+        #solver='saga'
+    #)
 
-    model_l2_test = LogisticRegression(
-        max_iter=2000,
-        l1_ratio=0.0,
-        C=c_value,
-        class_weight='balanced',
-        solver='saga'
-    )
+    #model_l2_test = LogisticRegression(
+        #max_iter=2000,
+        #l1_ratio=0.0,
+        #C=c_value,
+        #class_weight='balanced',
+        #solver='saga'
+    #)
 
-    model_l1_test.fit(X_train_scaled, y_train)
-    model_l2_test.fit(X_train_scaled, y_train)
+    #model_l1_test.fit(X_train_scaled, y_train)
+    #model_l2_test.fit(X_train_scaled, y_train)
 
-    nonzero_l1 = (model_l1_test.coef_[0] != 0).sum()
-    nonzero_l2 = (model_l2_test.coef_[0] != 0).sum()
+    #nonzero_l1 = (model_l1_test.coef_[0] != 0).sum()
+    #nonzero_l2 = (model_l2_test.coef_[0] != 0).sum()
 
-    print(f"C={c_value}: L1 = {nonzero_l1}/112 non-zero coefficients")
-    print(f"C={c_value}: L2 = {nonzero_l2}/112 non-zero coefficients")
+    #print(f"C={c_value}: L1 = {nonzero_l1}/112 non-zero coefficients")
+    #print(f"C={c_value}: L2 = {nonzero_l2}/112 non-zero coefficients")

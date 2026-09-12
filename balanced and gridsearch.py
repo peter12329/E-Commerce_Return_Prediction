@@ -13,7 +13,7 @@ from sklearn.utils.class_weight import compute_class_weight
 
 from sklearn.svm import LinearSVC
 from sklearn.calibration import CalibratedClassifierCV
-
+from sklearn.tree import DecisionTreeClassifier
 
 # ---------------------------------------------------------
 # Variables from the baseline 
@@ -216,3 +216,25 @@ print(f"Precision: {precision_score(y_test, y_pred_svm):.2f}")
 print(f"Recall: {recall_score(y_test, y_pred_svm):.2f}")
 print(f"F1: {f1_score(y_test, y_pred_svm):.2f}")
 print(f"ROC-AUC: {roc_auc_score(y_test, y_prob_svm):.2f}")
+
+print(" ")
+print(" ")
+
+tree_model = DecisionTreeClassifier(max_depth=6, class_weight='balanced', random_state=42)
+tree_model.fit(X_train_scaled, y_train)
+
+y_pred_tree = tree_model.predict(X_test_scaled)
+y_prob_tree = tree_model.predict_proba(X_test_scaled)[:, 1]
+
+print(confusion_matrix(y_test, y_pred_tree))
+print(f"Decision tree Accuracy: {accuracy_score(y_test, y_pred_tree):.2f}")
+print(f"Decision tree Precision: {precision_score(y_test, y_pred_tree):.2f}")
+print(f"Decision tree Recall: {recall_score(y_test, y_pred_tree):.2f}")
+print(f"Decision tree F1: {f1_score(y_test, y_pred_tree):.2f}")
+print(f"Decision tree ROC-AUC: {roc_auc_score(y_test, y_prob_tree):.2f}")
+
+importance_df = pd.DataFrame({
+    'feature': X.columns,
+    'importance': tree_model.feature_importances_
+}).sort_values('importance', ascending=False).head(10)
+print(importance_df)

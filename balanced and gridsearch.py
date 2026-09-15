@@ -47,12 +47,33 @@ df = pd.read_csv(path)
 df['is_returned'] = df['return_status'].notna().astype(int)
 
 leak_or_useless = [
-    'order_id', 'customer_id', 'customer_name', 'order_date', 'order_time',
-    'return_status', 'return_reason', 'customer_review', 'review_sentiment',
-    'customer_rating', 'campaign_name', 'coupon_code',
+    'order_id', 'customer_id', 'customer_name',
+    'order_date', 'order_time',
+
+    'return_status', 'return_reason',
+    'customer_review', 'review_sentiment',
+    'customer_rating',
+
+    'campaign_name', 'coupon_code',
+
     'customer_postal_code', 'customer_city',
-    'order_status', 'payment_status', 'loyalty_points_earned', 'discount_amount', 'loyalty_points_redeemed', 'gross_sales', 'delivery_status']
-df = df.drop(columns=leak_or_useless)
+
+    'order_status', 'payment_status',
+
+    'loyalty_points_earned',
+    'discount_amount',
+    'loyalty_points_redeemed',
+    'gross_sales',
+
+    'delivery_status',
+    'delivery_days',
+    'estimated_delivery_days',
+
+    'net_sales',
+    'profit',
+    'profit_margin_percentage',
+]
+df = df.drop(columns=[c for c in leak_or_useless if c in df.columns])
 
 suspect_cols = ['loyalty_points_earned', 'discount_amount', 'loyalty_points_redeemed', 'gross_sales']
 
@@ -60,8 +81,8 @@ suspect_cols = ['loyalty_points_earned', 'discount_amount', 'loyalty_points_rede
 #    print(f"\n{col}:")
 #    print(df.groupby('is_returned')[col].describe())
 
-df['delivery_days'] = df['delivery_days'].fillna(df['delivery_days'].median())
-df['estimated_delivery_days'] = df['estimated_delivery_days'].fillna(df['estimated_delivery_days'].median())
+#df['delivery_days'] = df['delivery_days'].fillna(df['delivery_days'].median())
+#df['estimated_delivery_days'] = df['estimated_delivery_days'].fillna(df['estimated_delivery_days'].median())
 
 X = pd.get_dummies(df.drop(columns=['is_returned']), drop_first=True)
 y = df['is_returned']
@@ -149,7 +170,7 @@ print("\nTop 10 feature coefficients (grid search best model):")
 print(coef_df.head(10))
 
 # ---------------------------------------------------------
-# Best threshold by F1 (only meaningful once leakage is ruled out)
+# Best threshold by F1
 # ---------------------------------------------------------
 best_f1 = 0
 best_threshold = 0.5
@@ -169,39 +190,42 @@ print(f"Precision: {precision_score(y_test, y_pred_final):.2f}")
 print(f"Recall:    {recall_score(y_test, y_pred_final):.2f}")
 print(f"F1:        {f1_score(y_test, y_pred_final):.2f}")
 
-# ---------------------------------------------------------
-# Comparison table
-# ---------------------------------------------------------
 
-print("Number of records:", df.shape[0])
-print("Number of model features:", X.shape[1])
-print("Target variable: is_returned")
 
-# balanced version
+
+
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------
+# balanced
+# ---------------------------------------------------------
 modelbalanced = LogisticRegression(max_iter=1000, class_weight='balanced')
+
+
 modelbalanced.fit(X_train_scaled, y_train)
-y_predbalanced = modelbalanced.predict(X_test_scaled)
-y_probbalanced = modelbalanced.predict_proba(X_test_scaled)[:, 1]
+y_pred_balanced = modelbalanced.predict(X_test_scaled)
+y_prob_balanced = modelbalanced.predict_proba(X_test_scaled)[:, 1]
 
-# grid search
-from sklearn.model_selection import GridSearchCV
-param_grid = {'C': [0.001, 0.01, 0.1, 1, 10], 'class_weight': [None, 'balanced']}
-grid = GridSearchCV(LogisticRegression(max_iter=1000), param_grid, scoring='f1', cv=5, n_jobs=-1)
-grid.fit(X_train_scaled, y_train)
-best_model = grid.best_estimator_
-y_pred_best = best_model.predict(X_test_scaled)
-y_prob_best = best_model.predict_proba(X_test_scaled)[:, 1]
+print("\nBalanced")
+print(confusion_matrix(y_test, y_pred_balanced))
+print(pd.Series(y_pred_balanced).value_counts())
 
-# comparison
-comparison = pd.DataFrame({
-    'Metric': ['Accuracy', 'Precision (Returned)', 'Recall (Returned)', 'F1 (Returned)', 'ROC-AUC'],
-    'Baseline': [accuracy_score(y_test, y_pred), precision_score(y_test, y_pred), recall_score(y_test, y_pred), f1_score(y_test, y_pred), roc_auc_score(y_test, y_prob)],
-    'Balanced': [accuracy_score(y_test, y_predbalanced), precision_score(y_test, y_predbalanced), recall_score(y_test, y_predbalanced), f1_score(y_test, y_predbalanced), roc_auc_score(y_test, y_probbalanced)],
-    'Grid Search': [accuracy_score(y_test, y_pred_best), precision_score(y_test, y_pred_best), recall_score(y_test, y_pred_best), f1_score(y_test, y_pred_best), roc_auc_score(y_test, y_prob_best)]
-})
-print(comparison.round(2))
+print(f"Accuracy: {accuracy_score(y_test, y_pred_balanced):.2f}")
+print(f"Precision: {precision_score(y_test, y_pred_balanced):.2f}")
+print(f"Recall: {recall_score(y_test, y_pred_balanced):.2f}")
+print(f"F1: {f1_score(y_test, y_pred_balanced):.2f}")
+print(f"ROC-AUC: {roc_auc_score(y_test, y_pred_balanced):.2f}")
 
-#SVM
+
+# ---------------------------------------------------------
+# SVM
+# ---------------------------------------------------------
 
 svm_model = LinearSVC(max_iter=5000, class_weight='balanced')
 svm_calibrated = CalibratedClassifierCV(svm_model, cv=3)
@@ -210,31 +234,79 @@ svm_calibrated.fit(X_train_scaled, y_train)
 y_pred_svm = svm_calibrated.predict(X_test_scaled)
 y_prob_svm = svm_calibrated.predict_proba(X_test_scaled)[:, 1]
 
+print("\nSVM")
 print(confusion_matrix(y_test, y_pred_svm))
+print(pd.Series(y_pred_svm).value_counts())
+
 print(f"Accuracy: {accuracy_score(y_test, y_pred_svm):.2f}")
 print(f"Precision: {precision_score(y_test, y_pred_svm):.2f}")
 print(f"Recall: {recall_score(y_test, y_pred_svm):.2f}")
 print(f"F1: {f1_score(y_test, y_pred_svm):.2f}")
 print(f"ROC-AUC: {roc_auc_score(y_test, y_prob_svm):.2f}")
 
-print(" ")
-print(" ")
 
-tree_model = DecisionTreeClassifier(max_depth=6, class_weight='balanced', random_state=42)
-tree_model.fit(X_train_scaled, y_train)
+# ---------------------------------------------------------
+# DECISION TREE
+# ---------------------------------------------------------
 
-y_pred_tree = tree_model.predict(X_test_scaled)
-y_prob_tree = tree_model.predict_proba(X_test_scaled)[:, 1]
+tree_model = DecisionTreeClassifier(
+    max_depth=5,
+    min_samples_split=5,
+    min_samples_leaf=2,
+    class_weight={0: 1, 1: 5},
+    random_state=42
+)
 
+tree_model.fit(X_train, y_train)
+
+y_pred_tree = tree_model.predict(X_test)
+y_prob_tree = tree_model.predict_proba(X_test)[:, 1]
+
+print("\nDecision Tree")
 print(confusion_matrix(y_test, y_pred_tree))
-print(f"Decision tree Accuracy: {accuracy_score(y_test, y_pred_tree):.2f}")
-print(f"Decision tree Precision: {precision_score(y_test, y_pred_tree):.2f}")
-print(f"Decision tree Recall: {recall_score(y_test, y_pred_tree):.2f}")
-print(f"Decision tree F1: {f1_score(y_test, y_pred_tree):.2f}")
-print(f"Decision tree ROC-AUC: {roc_auc_score(y_test, y_prob_tree):.2f}")
+print(pd.Series(y_pred_tree).value_counts())
 
-importance_df = pd.DataFrame({
-    'feature': X.columns,
-    'importance': tree_model.feature_importances_
-}).sort_values('importance', ascending=False).head(10)
-print(importance_df)
+print(f"Accuracy:  {accuracy_score(y_test, y_pred_tree):.2f}")
+print(f"Precision: {precision_score(y_test, y_pred_tree):.2f}")
+print(f"Recall:    {recall_score(y_test, y_pred_tree):.2f}")
+print(f"F1:        {f1_score(y_test, y_pred_tree):.2f}")
+print(f"ROC-AUC:   {roc_auc_score(y_test, y_prob_tree):.2f}")
+
+
+
+
+
+
+
+
+# ---------------------------------------------------------
+# GRID SEARCH
+# ---------------------------------------------------------
+# from sklearn.model_selection import GridSearchCV
+# param_grid = {'C': [0.001, 0.01, 0.1, 1, 10], 'class_weight': [None, 'balanced']}
+# grid = GridSearchCV(LogisticRegression(max_iter=1000), param_grid, scoring='f1', cv=5, n_jobs=-1)
+# grid.fit(X_train_scaled, y_train)
+# best_model = grid.best_estimator_
+# y_pred_best = best_model.predict(X_test_scaled)
+# y_prob_best = best_model.predict_proba(X_test_scaled)[:, 1]
+
+
+# importance_df = pd.DataFrame({
+#     'feature': X.columns,
+#     'importance': tree_model.feature_importances_
+# }).sort_values('importance', ascending=False).head(10)
+# print(importance_df)
+
+# ---------------------------------------------------------
+# Comparison table
+# ---------------------------------------------------------
+# print("Number of records:", df.shape[0])
+# print("Number of model features:", X.shape[1])
+# print("Target variable: is_returned")
+# comparison = pd.DataFrame({
+#     'Metric': ['Accuracy', 'Precision (Returned)', 'Recall (Returned)', 'F1 (Returned)', 'ROC-AUC'],
+#     'Baseline': [accuracy_score(y_test, y_pred), precision_score(y_test, y_pred), recall_score(y_test, y_pred), f1_score(y_test, y_pred), roc_auc_score(y_test, y_prob)],
+#     'Balanced': [accuracy_score(y_test, y_predbalanced), precision_score(y_test, y_predbalanced), recall_score(y_test, y_predbalanced), f1_score(y_test, y_predbalanced), roc_auc_score(y_test, y_probbalanced)],
+#     'Grid Search': [accuracy_score(y_test, y_pred_best), precision_score(y_test, y_pred_best), recall_score(y_test, y_pred_best), f1_score(y_test, y_pred_best), roc_auc_score(y_test, y_prob_best)]
+# })
+# print(comparison.round(2))

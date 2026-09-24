@@ -7,7 +7,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 print("Importing baseline (this re-runs the full baseline script)...")
 spec = importlib.util.spec_from_file_location(
     "baseline",
-    r"C:\Users\venjo\Desktop\E-Commerce Return Prediction\linear logistic regression implementation.py"
+    r"C:\Users\venjo\Desktop\E-Commerce Return Prediction\Linear_Logistic_Regression_Basecode.py"
 )
 baseline = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(baseline)

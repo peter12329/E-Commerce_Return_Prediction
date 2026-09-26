@@ -31,17 +31,16 @@ print("L2 done.")
 print("L1 non-zero coefficients:", (model_l1.coef_[0] != 0).sum(), "/", len(model_l1.coef_[0]))
 print("L2 non-zero coefficients:", (model_l2.coef_[0] != 0).sum(), "/", len(model_l2.coef_[0]))
 
-for c_value in [1, 0.1, 0.01, 0.001]:
-    print(f"Fitting L1 sweep, C={c_value}...")
-    m_l1 = LogisticRegression(max_iter=2000, l1_ratio=1.0, C=c_value, class_weight='balanced', solver='saga')
-    m_l1.fit(X_train_scaled, y_train)
-    nonzero = (m_l1.coef_[0] != 0).sum()
+c_value = 0.1
+m_l1 = LogisticRegression(max_iter=2000, l1_ratio=1.0, C=c_value, class_weight='balanced', solver='saga')
+m_l1.fit(X_train_scaled, y_train)
+nonzero = (m_l1.coef_[0] != 0).sum()
 
-    y_pred_c = m_l1.predict(X_test_scaled)
-    y_prob_c = m_l1.predict_proba(X_test_scaled)[:, 1]
+y_pred_c = m_l1.predict(X_test_scaled)
+y_prob_c = m_l1.predict_proba(X_test_scaled)[:, 1]
 
-    print(f"C={c_value}: L1 = {nonzero}/{X.shape[1]} non-zero coefficients")
-    print(f"  Precision: {precision_score(y_test, y_pred_c):.2f}")
-    print(f"  Recall:    {recall_score(y_test, y_pred_c):.2f}")
-    print(f"  F1:        {f1_score(y_test, y_pred_c):.2f}")
-    print(f"  ROC-AUC:   {roc_auc_score(y_test, y_prob_c):.2f}")
+print(f"C={c_value}: L1 = {nonzero}/{X.shape[1]} non-zero coefficients")
+print(f"  Precision: {precision_score(y_test, y_pred_c):.2f}")
+print(f"  Recall:    {recall_score(y_test, y_pred_c):.2f}")
+print(f"  F1:        {f1_score(y_test, y_pred_c):.2f}")
+print(f"  ROC-AUC:   {roc_auc_score(y_test, y_prob_c):.2f}")

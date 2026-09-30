@@ -1,72 +1,143 @@
 import importlib.util
+
 import pandas as pd
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, roc_auc_score, confusion_matrix, classification_report
-from sklearn.model_selection import GridSearchCV, cross_val_score
+
+from sklearn.ensemble import GradientBoostingRegressor
+
+from sklearn.metrics import (
+    mean_squared_error,
+    mean_absolute_error,
+    r2_score
+)
+
+from sklearn.model_selection import cross_val_score
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 print("Script starting...")
 
 print("Importing baseline (this re-runs the full baseline script)...")
+
 spec = importlib.util.spec_from_file_location(
     "baseline",
-    r"C:\Users\venjo\Desktop\E-Commerce Return Prediction\Linear_Logistic_Regression_Basecode.py"
+    r"C:\Users\Test\data_science\E-Commerce_Return_Prediction\Linear_Logistic_Regression_Basecode.py"
 )
+
 baseline = importlib.util.module_from_spec(spec)
+
 spec.loader.exec_module(baseline)
+
 print("Baseline import finished.")
 
 X_train = baseline.X_train
 X_test = baseline.X_test
+
 y_train = baseline.y_train
 y_test = baseline.y_test
 
+
 # ---------------------------------------------------------
-# Decision Tree
+# Stochastic Gradient Boosting Regressor
 # ---------------------------------------------------------
-print("Fitting Decision Tree...")
-tree_model = DecisionTreeClassifier(
-    max_depth=5,
+
+print("Fitting SGBR...")
+
+sgbr_model = GradientBoostingRegressor(
+    n_estimators=100,
+    learning_rate=0.1,
+    max_depth=3,
     min_samples_split=5,
     min_samples_leaf=2,
-    class_weight={0: 1, 1: 5},
     random_state=42
 )
 
-tree_model.fit(X_train, y_train)
-print("Decision Tree fit done.")
+sgbr_model.fit(X_train, y_train)
 
-y_pred_tree = tree_model.predict(X_test)
-y_prob_tree = tree_model.predict_proba(X_test)[:, 1]
+print("SGBR fit done.")
 
-print("\nDecision Tree")
-print(confusion_matrix(y_test, y_pred_tree))
-print(pd.Series(y_pred_tree).value_counts())
-
-print(f"Accuracy:  {accuracy_score(y_test, y_pred_tree):.2f}")
-print(f"Precision: {precision_score(y_test, y_pred_tree):.2f}")
-print(f"Recall:    {recall_score(y_test, y_pred_tree):.2f}")
-print(f"F1:        {f1_score(y_test, y_pred_tree):.2f}")
-print(f"ROC-AUC:   {roc_auc_score(y_test, y_prob_tree):.2f}")
+y_pred_sgbr = sgbr_model.predict(X_test)
 
 
-cv_scores = cross_val_score(tree_model, X_train, y_train, cv=5, scoring='f1')
-print(f"Cross-validated F1 scores: {cv_scores}")
-print(f"Mean CV F1 score: {cv_scores.mean():.2f}")
+# ---------------------------------------------------------
+# SGBR Evaluation
+# ---------------------------------------------------------
+
+print("\nSGBR")
+
+print(f"Mean Squared Error: {mean_squared_error(y_test, y_pred_sgbr):.4f}")
+print(f"Mean Absolute Error: {mean_absolute_error(y_test, y_pred_sgbr):.4f}")
+print(f"R²: {r2_score(y_test, y_pred_sgbr):.4f}")
 
 
-plt.figure(figsize=(6,4))
-sns.heatmap(confusion_matrix(y_test, y_pred_tree), annot=True, fmt='d', cmap='Blues')
-plt.title('Decision Tree Confusion Matrix')
-plt.xlabel('Predicted')
-plt.ylabel('Actual')
-plt.show()
+# ---------------------------------------------------------
+# Cross Validation
+# ---------------------------------------------------------
 
-importances = tree_model.feature_importances_
+cv_scores = cross_val_score(
+    sgbr_model,
+    X_train,
+    y_train,
+    cv=5,
+    scoring='neg_mean_squared_error'
+)
+
+cv_mse = -cv_scores
+
+print(f"Cross-validated MSE scores: {cv_mse}")
+print(f"Mean CV MSE: {cv_mse.mean():.4f}")
+
+
+# ---------------------------------------------------------
+# Actual vs Predicted
+# ---------------------------------------------------------
+
+plt.figure(figsize=(6, 4))
+
+plt.scatter(y_test, y_pred_sgbr)
+
+plt.xlabel("Actual")
+plt.ylabel("Predicted")
+
+plt.title("SGBR Actual vs Predicted")
+
+plt.savefig(
+    "SGBR_actual_vs_predicted.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+
+# ---------------------------------------------------------
+# Feature Importances
+# ---------------------------------------------------------
+
+importances = sgbr_model.feature_importances_
+
 features = X_train.columns
-feat_imp = pd.Series(importances, index=features).sort_values(ascending=False)
-plt.figure(figsize=(8,6))
-sns.barplot(x=feat_imp.values, y=feat_imp.index)
-plt.title('Feature Importances')
-plt.show()
+
+feat_imp = pd.Series(
+    importances,
+    index=features
+).sort_values(ascending=False)
+
+plt.figure(figsize=(8, 6))
+
+sns.barplot(
+    x=feat_imp.values,
+    y=feat_imp.index
+)
+
+plt.title("SGBR Feature Importances")
+
+plt.savefig(
+    "SGBR_feature_importances.png",
+    dpi=300,
+    bbox_inches="tight"
+)
+
+plt.close()
+
+print("Plots saved successfully.")
